@@ -1,57 +1,23 @@
-import json
+# NLP analysis
 import string
 
 from nltk.corpus import stopwords as sw
 from nltk.corpus import wordnet
 from nltk import wordpunct_tokenize, WordNetLemmatizer, sent_tokenize, pos_tag
-import nltk
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD
 
-import pandas as pd
-
-import os
-import sys
-import time
+# local modules
+from retrieve import *
+from clean import *
 
 # initialize constants, lematizer, punctuation and stopwords
 lemmatizer = WordNetLemmatizer()
 punct = set(string.punctuation)
 
-# merge custom/standard stop words as set
-custom_stop_words = ['–', '\u2019', 'u', '\u201d', '\u201d.',
-                     '\u201c', 'say', 'saying', 'sayings',
-                     'says', 'us', 'un', '.\"', 'would',
-                     'let', '.”', 'said', ',”'
-                     ]
-stopwords = set(sw.words('english') + custom_stop_words)
-
-
-def read_in(fileName):
-    # parse saved JSON file
-    with open('./utility/' + fileName + '.json') as json_data:
-        jsonDict = json.load(json_data)
-
-    # retrieve all articles with sentiment analysis, trim
-    sentArticles = []
-    for d in jsonDict['rawArticles']:
-        if 'sent' in d:
-            sentArticles.append({'title': d['webTitle'],
-                                 'sentiment': format(d['sent'], '.2f'),
-                                 'magnitude': format(d['mag'], '.2f')})
-
-    # listify all articles generally
-    allArticles = [a['fields']['bodyText'] for a in jsonDict['rawArticles']]
-
-    # begin building the final dictionary
-    finalDict = {'articleCount': len(allArticles),
-                 'sentArticles': sentArticles}
-
-    df = pd.DataFrame(allArticles)
-
-    # #return both df and larger object dict
-    return df, finalDict
+# define stopwords
+stopwords = set(sw.words('english'))
 
 
 def lemmatize(token, tag):
@@ -98,12 +64,14 @@ def cab_tokenizer(document):
 
 def retrieveTopTDIDF(df):
     # index each term's Term Frequency and Inverse Document Frequency
-    df = df[0]  # text entries only
+    df = df['bodyText']  # text entries only
+
+    print(df.head(5))
+    print(df.shape)
 
     # use count vectorizer to find TF and DF of each term
     count_vec = CountVectorizer(tokenizer=cab_tokenizer,
-                                ngram_range=(1, 2), min_df=5, max_df=0.8,
-                                max_features=100)
+                                ngram_range=(1, 2), min_df=0.2, max_df=0.8)
     X_count = count_vec.fit_transform(df)
 
     # return total number of tokenized words
@@ -111,8 +79,8 @@ def retrieveTopTDIDF(df):
 
     # cast numpy integers back to python integers
     terms = [{'term': t,
-              'tf': int(X_count[:, count_vec.vocabulary_[t]].sum()),
-              'df': int(X_count[:, count_vec.vocabulary_[t]].count_nonzero())}
+              'tf': X_count[:, count_vec.vocabulary_[t]].sum(),
+              'df': X_count[:, count_vec.vocabulary_[t]].count_nonzero()}
              for t in count_vec.vocabulary_]
 
     topTenTerms = sorted(terms, key=lambda k: (
@@ -127,12 +95,11 @@ def retrieveTopTDIDF(df):
 def truncateSVD(df):
     # apply singular value decomposition (matrix factorization), retrieve
     # prominent clusters
-    df = df[0]  # text entries only
+    df = df.filter(['bodyText'])  # text entries only
 
     # collapse into bag of words representation, limit extreme terms
     vector = TfidfVectorizer(tokenizer=cab_tokenizer,
-                             ngram_range=(1, 2), min_df=5, max_df=0.8,
-                             max_features=100)
+                             ngram_range=(1, 2), min_df=0.1, max_df=0.9)
     matrix = vector.fit_transform(df)
 
     # generate truncated SVD usingp reivously generated matrix
@@ -154,24 +121,18 @@ def truncateSVD(df):
 
 
 def main():
-    # generate df, maintain original object
-    df, finalDict = read_in(sys.argv[1])
+    #retrieve and clean
+    retrieve_articles()
+    df = read_in()
+    df = scrub(df)
 
     # retrieve most frequent, weighted terms
     topTDIDFTerms, tokenSum, totalTokens = retrieveTopTDIDF(df)
 
+    print(topTDIDFTerms, tokenSum, totalTokens)
+
     # retrieve clusters
     clusterTerms = truncateSVD(df)
-
-    # make final updates to dictionary
-    finalDict.update({'totalTokens': totalTokens, 'tokenSum': tokenSum,
-                      'topTerms': topTDIDFTerms, 'clusters': clusterTerms})
-
-    # dump the finalized JSON object back into node parent process
-    print(json.dumps(finalDict))
-
-    # remove intermediate JSON file
-    os.remove('./utility/' + sys.argv[1] + '.json')
 
 if __name__ == '__main__':
     main()
