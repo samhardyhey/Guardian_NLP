@@ -33,4 +33,12 @@ def scrub(df):
     df = df.filter(['type', 'sectionId', 'webPublicationDate', 'webTitle',
                     'trailText', 'byline', 'wordcount', 'firstPublicationDate',
                     'bodyText', 'charCount'])
+
+    # differentiate necessary columns
+    df['webPublicationDate'] = pd.to_datetime(df['webPublicationDate'])
+    df['firstPublicationDate'] = pd.to_datetime(df['firstPublicationDate'])
+
+    df['wordcount'] = df['wordcount'].astype(int)
+    df['charCount'] = df['charCount'].astype(int)
+
     return df

@@ -1,23 +1,26 @@
-# NLP analysis
 import string
+import pandas as pd
 
+import nltk
 from nltk.corpus import stopwords as sw
 from nltk.corpus import wordnet
 from nltk import wordpunct_tokenize, WordNetLemmatizer, sent_tokenize, pos_tag
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.decomposition import TruncatedSVD
+from sklearn.cluster import KMeans
 
-# local modules
-from retrieve import *
-from clean import *
 
 # initialize constants, lematizer, punctuation and stopwords
 lemmatizer = WordNetLemmatizer()
 punct = set(string.punctuation)
 
 # define stopwords
-stopwords = set(sw.words('english'))
+custom_stop_words = ['–', '\u2019', 'u', '\u201d', '\u201d.',
+                     '\u201c', 'say', 'saying', 'sayings',
+                     'says', 'us', 'un', '.\"', 'would',
+                     'let', '.”', 'said', ',”'
+                     ]
+stopwords = set(sw.words('english') + custom_stop_words)
 
 
 def lemmatize(token, tag):
@@ -62,77 +65,75 @@ def cab_tokenizer(document):
     return tokens
 
 
-def retrieveTopTDIDF(df):
-    # index each term's Term Frequency and Inverse Document Frequency
-    df = df['bodyText']  # text entries only
+def retrieveTopTFIDF(df, main):
+    # retrieve top-ranked terms via TFIDF vector
+    df = df['bodyText']
 
-    print(df.head(5))
-    print(df.shape)
-
-    # use count vectorizer to find TF and DF of each term
     count_vec = CountVectorizer(tokenizer=cab_tokenizer,
-                                ngram_range=(1, 2), min_df=0.2, max_df=0.8)
+                                ngram_range=(1, 2),
+                                min_df=0.2, max_df=0.8)
     X_count = count_vec.fit_transform(df)
 
-    # return total number of tokenized words
     totalTokens = len(count_vec.get_feature_names())
 
-    # cast numpy integers back to python integers
+    # format terms
     terms = [{'term': t,
               'tf': X_count[:, count_vec.vocabulary_[t]].sum(),
               'df': X_count[:, count_vec.vocabulary_[t]].count_nonzero()}
              for t in count_vec.vocabulary_]
 
-    topTenTerms = sorted(terms, key=lambda k: (
-        k['tf'], k['df']), reverse=True)[:10]
+    topTenTerms = sorted(terms,
+                         key=lambda k: (k['tf'], k['df']),
+                         reverse=True)[:10]
 
     tokenSum = sum(term['tf'] for term in terms)
 
-    # return top ten terms as well as sum of all tokenizations
-    return topTenTerms, tokenSum, totalTokens
+    # update main data object
+    main.update({'totalTokens': totalTokens,
+                 'tokenSum': tokenSum,
+                 'topTenTerms': topTenTerms})
+
+    return main
 
 
-def truncateSVD(df):
-    # apply singular value decomposition (matrix factorization), retrieve
-    # prominent clusters
-    df = df.filter(['bodyText'])  # text entries only
+def createKMeans(df, main):
+    # vectorize, fit and generate clusters
+    tfidf_vec = TfidfVectorizer(tokenizer=cab_tokenizer,
+                                ngram_range=(1, 2),
+                                min_df=0.2, max_df=0.8)
+    X = tfidf_vec.fit_transform(df['bodyText'])
 
-    # collapse into bag of words representation, limit extreme terms
-    vector = TfidfVectorizer(tokenizer=cab_tokenizer,
-                             ngram_range=(1, 2), min_df=0.1, max_df=0.9)
-    matrix = vector.fit_transform(df)
+    kmeans = KMeans(n_clusters=7, random_state=42).fit(X)
 
-    # generate truncated SVD usingp reivously generated matrix
-    svd = TruncatedSVD(n_components=20, algorithm='randomized',
-                       n_iter=5, random_state=42)
-    svdTrans = svd.fit_transform(matrix)
+    # update main data object
+    main['kMeanClusters'] = formatKMeans(kmeans.n_clusters,
+                                         kmeans.cluster_centers_,
+                                         tfidf_vec.get_feature_names())
 
-    # sort by term weighting
-    sorted_comp = svd.components_.argsort()[:, ::-1]
-    terms = vector.get_feature_names()
-
-    # fill with 10 SVD cluster entries
-    clusterTerms = []
-
-    for comp_num in range(10):
-        clusterTerms.append([terms[i] for i in sorted_comp[comp_num, :5]])
-
-    return clusterTerms
+    return main
 
 
-def main():
-    #retrieve and clean
-    retrieve_articles()
-    df = read_in()
-    df = scrub(df)
+def formatKMeans(n_clusters, cluster_centers, terms, num_word=5):
+    # format results for prominent clusters
+    ordered_centroids = cluster_centers.argsort()[:, ::-1]
 
-    # retrieve most frequent, weighted terms
-    topTDIDFTerms, tokenSum, totalTokens = retrieveTopTDIDF(df)
+    clusters = dict()
 
-    print(topTDIDFTerms, tokenSum, totalTokens)
+    for cluster in range(n_clusters):
+        temp = []
+        for term_idx in ordered_centroids[cluster, :5]:
+            temp.append(terms[term_idx])
+        clusters[cluster] = temp
 
-    # retrieve clusters
-    clusterTerms = truncateSVD(df)
+    return clusters
 
-if __name__ == '__main__':
-    main()
+
+def descriptive(df, main):
+    # descriptive, macro information
+    main['articleCount'] = len(df.index)
+
+    main['totalChar'] = df['charCount'].sum()
+
+    main['totalWord'] = df['wordcount'].sum()
+
+    return main
