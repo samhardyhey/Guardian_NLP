@@ -78,8 +78,8 @@ def retrieveTopTFIDF(df, main):
 
     # format terms
     terms = [{'term': t,
-              'tf': X_count[:, count_vec.vocabulary_[t]].sum(),
-              'df': X_count[:, count_vec.vocabulary_[t]].count_nonzero()}
+              'tf': int(X_count[:, count_vec.vocabulary_[t]].sum()),
+              'df': int(X_count[:, count_vec.vocabulary_[t]].count_nonzero())}
              for t in count_vec.vocabulary_]
 
     topTenTerms = sorted(terms,
@@ -132,8 +132,8 @@ def descriptive(df, main):
     # descriptive, macro information
     main['articleCount'] = len(df.index)
 
-    main['totalChar'] = df['charCount'].sum()
+    main['totalChar'] = int(df['charCount'].sum())
 
-    main['totalWord'] = df['wordcount'].sum()
+    main['totalWord'] = int(df['wordcount'].sum())
 
     return main

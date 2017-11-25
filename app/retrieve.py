@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 
 # define dev key and query object
-MY_API_KEY = "~~Guardian API Key~~"
+MY_API_KEY = "372adb16-2704-4b36-9f99-3472dd5ac682"
 API_ENDPOINT = 'http://content.guardianapis.com/search'
 my_params = {
     'from-date': "",

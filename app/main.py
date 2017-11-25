@@ -19,5 +19,9 @@ def main():
 
     print(main)
 
+    # write final analysis
+    with open('output/results.json', 'w') as outfile:
+        json.dump(main, outfile, ensure_ascii=False)
+
 if __name__ == '__main__':
     main()
