@@ -2,7 +2,7 @@ FROM ubuntu:16.04
 
 MAINTAINER Sam Hardy
 
-#all dependencies
+#system dependencies
 RUN apt-get -y update && apt-get install -y \
 apt-utils \
 python3-dev \
@@ -14,20 +14,18 @@ git \
 python3 \
 python3-pip
 
+#python specific dependencies
 RUN pip3 install --upgrade pip \
-&& pip3 install scikit-learn \
-&& pip3 install numpy \
-&& pip3 install nltk \
-&& pip3 install pandas \
-&& pip3 install requests
-
-RUN apt-get install python3-scipy -y
+&& pip3 install scikit-learn==0.19.1 \
+&& pip3 install --upgrade scipy \
+&& pip3 install numpy==1.13.3 \
+&& pip3 install nltk==3.2.5 \
+&& pip3 install pandas==0.20.3
+RUN pip3 install requests
 
 #nltk specific dependencies
 RUN python3 -m nltk.downloader all
 
-#configure application directory
+#configure app directories
 ADD /app /app
 WORKDIR /app
-
-CMD python3 main.py
