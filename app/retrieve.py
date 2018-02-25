@@ -4,11 +4,11 @@ import requests
 import os
 from os import mkdir
 from os.path import join, exists
-from datetime import date, timedelta
-
+from datetime import timedelta
+from util import retrieve_key
 
 # define dev key and query object
-MY_API_KEY = "372adb16-2704-4b36-9f99-3472dd5ac682"
+MY_API_KEY = retrieve_key()
 API_ENDPOINT = 'http://content.guardianapis.com/search'
 my_params = {
     'from-date': "",
@@ -22,13 +22,10 @@ my_params = {
     'api-key': MY_API_KEY
 }
 
-# define retrieval period
-start_date = date(2017, 3, 1)
-end_date = date(2017, 3, 10)
-dayrange = range((end_date - start_date).days + 1)
 
+def retrieve_articles(start_date, end_date):
+    dayrange = range((end_date - start_date).days + 1)
 
-def retrieve_articles():
     # store articles
     ARTICLES_DIR = 'articles'
 
@@ -45,6 +42,7 @@ def retrieve_articles():
             my_params['to-date'] = datestr
             current_page = 1
             total_pages = 1
+
             while current_page <= total_pages:
                 print("...page", current_page)
                 my_params['page'] = current_page
